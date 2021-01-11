@@ -1,4 +1,4 @@
-import requests,json,time,math,re
+import requests,json,time,math,re,csv
 class Result:
     def __init__(self,nextUri,timeout = 5):
         self.__nextUri = nextUri
@@ -73,15 +73,16 @@ class WebResult:
         self.uuid = uuid
         self.client = Client
         self.result = None
-        self.csv_localtion = None
+        self.finished = False # 没运行完和执行失败时都是False
         self.used_time = None
         self.infoUri = None
+        self.csv_path = None
     def __get_result_immediately(self):
         result = self.client.get_query(self.uuid)
         if result is not None:
             #print(result)
             if result['state'] == 'FINISHED':
-                self.csv_localtion = result['output']['location']
+                self.finished = True
                 self.used_time = result['queryStats']['elapsedTime']
                 self.infoUri = "http://{}:{}/ui/{}".format(self.client.host,self.client.port,result['infoUri'])
             elif result['state'] == 'FAILED':
@@ -100,6 +101,7 @@ class WebResult:
         while True:
             result = self.__get_result_immediately()
             if result is not None:
+                self.result = result
                 return result
             if use_time > timeout:
                 break
@@ -117,11 +119,30 @@ class WebResult:
         else:
             return  float(re.sub("m","",self.used_time))*60
     def get_infoUri(self,timeout = None):
-        self.get_result(time)
+        self.get_result(timeout)
         return self.infoUri
+    def get_output(self,timeout = None):
+        csv_path = self.get_csv_path(timeout = None)
+        if csv_path is not None:
+            print_csv(csv_path)
+    def get_csv_path(self,timeout = None):
+        if self.csv_path is not None:
+            return self.csv_path
+        self.get_result(timeout)
+        if self.finished is False:
+            return None
+        elif self.result['output']['type'] == 'csv':
+            self.csv_path = "http://{}:{}{}".format(self.client.host,self.client.port,self.result['output']['location'][2:])
+            return self.csv_path
+        else:
+            print("output is {} Type".format(self.result['output']['type']))
+            return None
 
+def print_csv(csv_path):
+    res = requests.get(csv_path)
+    content = res.content.decode().strip()
+    print(content.replace('"','').replace(',',' | '))
 
-    
 class Client:
     def __init__(self,host="127.0.0.1",port=8080,user="lk",catalog="system",schema="runtime",timeout = 10000):
         self.host = host
@@ -173,9 +194,7 @@ class Client:
                 return query
         return None
 
-
 if __name__ == "__main__":
-    client = Client(host='172.30.0.2',port=18080,user='lk',catalog='clickhouse152',schema='ssb')
-    result = client.web_execute("SELECT year(LO_ORDERDATE) AS year,  S_CITY,  P_BRAND,  sum(LO_REVENUE - LO_SUPPLYCOST) AS profit  FROM lineorder_flat  WHERE S_NATION = 'UNITED STATES' AND (year(LO_ORDERDATE) = 1997 OR year(LO_ORDERDATE) = 1998) AND P_CATEGORY = 'MFGR#14'  GROUP BY  year(LO_ORDERDATE),  S_CITY,  P_BRAND  ORDER BY  year(LO_ORDERDATE) ASC,  S_CITY ASC,  P_BRAND ASC;")
-    #print(result.get_result())
-    print(result.used_time)
+    client = Client(host='192.168.40.152',port=18080,user='lk',catalog='clickhouse152',schema='ssb')
+    result = client.web_execute("SELECT sum(LO_REVENUE),  year(LO_ORDERDATE) AS year,  P_BRAND  FROM lineorder_flat  WHERE P_CATEGORY = 'MFGR#12' AND S_REGION = 'AMERICA'  GROUP BY  year(LO_ORDERDATE),  P_BRAND  ORDER BY  year(LO_ORDERDATE),  P_BRAND LIMIT 3")
+    result.get_output()

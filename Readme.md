@@ -35,6 +35,11 @@ result = client.web_execute(sql)
   - 功能：返回该sql语句的执行时间，单位秒
 - get_infoUri(timeout = 5)
   - 功能：获得sql执行详情页的链接
+- get_output(timeout = 5)
+  - 功能：直接打印输出结果
+  - 返回：无
+- get_csv_path(timeout = 5)
+  - 功能：获取包含结果的csv的url
 
 
 
