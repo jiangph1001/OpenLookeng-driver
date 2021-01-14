@@ -44,12 +44,12 @@ result = client.web_execute(sql)
 
 
 ## 基于REST API的执行
-
+不推荐使用这个方法，因为不稳定能获取到输出结果
 ```
 result = client.execute(sql)
 ```
 
-**接口**
+**可调用的方法**
 
 - get_result(timeout = 5) 
   - 功能：等待sql语句的执行返回结果

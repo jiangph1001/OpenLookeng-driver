@@ -33,6 +33,7 @@ class Result:
             return None
         
     def get_result(self,timeout = None):
+        # 获取执行结果，直到超时
         if self.__response is not None:
             return self.__response
         if timeout is None:
@@ -68,6 +69,7 @@ class Result:
         self.get_result(time)
         return self.infoUri
 
+# web api
 class WebResult:
     def __init__(self,uuid,Client):
         self.uuid = uuid
@@ -77,7 +79,9 @@ class WebResult:
         self.used_time = None
         self.infoUri = None
         self.csv_path = None
+    
     def __get_result_immediately(self):
+        # 返回当前执行的状态
         result = self.client.get_query(self.uuid)
         if result is not None:
             #print(result)
@@ -109,6 +113,7 @@ class WebResult:
             time.sleep(interval)
             interval = math.ceil(use_time/10)
         return None
+
     def get_used_time(self,timeout = None):
         self.get_result(timeout)
         #print(self.used_time)
@@ -121,10 +126,12 @@ class WebResult:
     def get_infoUri(self,timeout = None):
         self.get_result(timeout)
         return self.infoUri
+    
     def get_output(self,timeout = None):
         csv_path = self.get_csv_path(timeout = None)
         if csv_path is not None:
             print_csv(csv_path)
+        
     def get_csv_path(self,timeout = None):
         if self.csv_path is not None:
             return self.csv_path
@@ -138,10 +145,22 @@ class WebResult:
             print("output is {} Type".format(self.result['output']['type']))
             return None
 
+
 def print_csv(csv_path):
-    res = requests.get(csv_path)
-    content = res.content.decode().strip()
-    print(content.replace('"','').replace(',',' | '))
+    response = requests.get(csv_path)
+    if response.status_code == 200:
+        content = response.content.decode().strip()
+        lines = content.split('\n')
+        print_seperator = True
+        for line in lines:
+            print(line.replace('"','').replace(',',' | '))
+            if print_seperator:
+                print_seperator = False
+                length = len(line)
+                print("-"*length)
+        
+    else:
+        print("Error -->",response.status_code)
 
 class Client:
     def __init__(self,host="127.0.0.1",port=8080,user="lk",catalog="system",schema="runtime",timeout = 10000):
@@ -169,6 +188,7 @@ class Client:
             return Result(json.loads(response.text)['nextUri'])
         else:
             return response.text
+        
     def web_execute(self,sql):
         sql = sql.split(';')[0]
         payload = {
@@ -183,10 +203,25 @@ class Client:
         response = requests.put(url = self.web_execute_url,data = payload_str,headers = self.headers)
         self.uuid = json.loads(response.text)[0]['uuid']
         return WebResult(self.uuid,self)
+
+    def web_executes(self,sql):
+        web_results = []
+        sql_list = sql.split(';')
+        for sql in sql_list:
+            web_result = self.web_execute(sql)
+            web_results.append(web_result)
+        return web_results
+
+    def web_execute_from_file(self,filename):
+        with open(filename,'r') as file:
+            web_results = self.web_executes(file.read())
+        return web_results
+
     def get_all_query(self):
         response = requests.get(self.get_history_url,headers = self.headers)
         query_list = json.loads(response.text)
         return query_list
+
     def get_query(self,uuid):
         query_list = self.get_all_query()
         for query in query_list:
@@ -196,5 +231,8 @@ class Client:
 
 if __name__ == "__main__":
     client = Client(host='192.168.40.152',port=18080,user='lk',catalog='clickhouse152',schema='ssb')
-    result = client.web_execute("SELECT sum(LO_REVENUE),  year(LO_ORDERDATE) AS year,  P_BRAND  FROM lineorder_flat  WHERE P_CATEGORY = 'MFGR#12' AND S_REGION = 'AMERICA'  GROUP BY  year(LO_ORDERDATE),  P_BRAND  ORDER BY  year(LO_ORDERDATE),  P_BRAND LIMIT 3")
-    result.get_output()
+    #result = client.web_execute("SELECT sum(LO_REVENUE),  year(LO_ORDERDATE) AS year,  P_BRAND  FROM lineorder_flat  WHERE P_CATEGORY = 'MFGR#12' AND S_REGION = 'AMERICA'  GROUP BY  year(LO_ORDERDATE),  P_BRAND  ORDER BY  year(LO_ORDERDATE),  P_BRAND LIMIT 3")
+    #result.get_output()
+    web_ress = client.web_executes("select 1,2,3,4;select1")
+    for w in web_ress:
+        w.get_output()
